@@ -344,17 +344,17 @@ opp_vec2csv.pl -- converts OMNeT++ .vec files to csv format
 
 opp_vec2csv.pl [options] [file ...]
 
--F --filter <name=alias>
+-F --filter <name>[=<alias>]
 
-	add a column for vector [name], calling it [alias] (if provided)
+	add a column for vector <name>, calling it <alias> (if provided)
 
--A --attr [name=alias]
+-A --attr <name>[=<alias>]
 
-	add a column for attribute [name], calling it [alias] (if provided)
+	add a column for attribute <name>, calling it <alias> (if provided)
 
--P --param [name=alias]
+-P --param <name>[=<alias>]
 
-	add a column for parameter [name], calling it [alias] (if provided)
+	add a column for parameter <name>, calling it <alias> (if provided)
 
 -m --merge-by <e, m, t, or any combination thereof>
 
@@ -364,11 +364,11 @@ opp_vec2csv.pl [options] [file ...]
 	- t: same timestamp
 	default behavior is to keep each input line on its own output row
 
--s --sample [rate]
+-s --sample <rate>
 
-	output only a random sample of one in [rate] observations
+	output only a random sample of one in <rate> observations
 
--S --seed [seed]
+-S --seed <seed>
 
 	use a specific random seed for pseudo-random sampling
 
