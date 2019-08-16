@@ -258,7 +258,7 @@ foreach my $fileName (@fileNames) {
 							^
 							(?<time>[0-9e.+-]+)  # allow -1.234e+56
 							\s+
-							(?<value>[0-9e.+-]+)  # allow -1.234e+56
+							(?<value>([0-9e.+-]+)|(nan))  # allow -1.234e+56 and nan
 							$
 							}x) {
 					print STDERR "cannot parse as ETV: \"".$+{vecdata}."\"\n";
