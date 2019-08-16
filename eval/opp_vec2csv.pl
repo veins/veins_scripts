@@ -25,6 +25,8 @@
 # (Refer to POD sections at end of file for documentation)
 #
 
+# Julian Heinovski, 1 Feb 2017: Fixed header parsing
+
 use strict;
 use warnings;
 use Getopt::Long qw(:config no_ignore_case bundling auto_version auto_help);
@@ -167,51 +169,11 @@ foreach my $fileName (@fileNames) {
 
 	my $fileSize = -s $fileName;
 
-	print STDERR "reading header...\n" if $verbose;
+	print STDERR "reading file...\n" if $verbose;
 
-	# read header
+	# read file
 	my %attrValues = ();
 	my %paramValues = ();
-	while (<$FILE>) {
-
-		# found blank line
-		if (m{
-				^
-				\r?\n$
-				}x) {
-			last;
-		}
-
-		# found attr
-		if (m{
-				^attr
-				\s+
-				(?<attr>[^ ]+)
-				\s+
-				(?<value>.+)
-				\r?\n$
-				}x) {
-			$attrValues{$+{attr}} = $+{value};
-			next;
-		}
-
-		# found param
-		if (m{
-				^param
-				\s+
-				(?<param>[^ ]+)
-				\s+
-				(?<value>.+)
-				\r?\n$
-				}x) {
-			$paramValues{$+{param}} = $+{value};
-			next;
-		}
-	}
-
-	print STDERR "reading body...\n" if $verbose;
-
-	# read body
 	my @nodName = (); # vector_id <-> nod_name mappings
 	my @vecName = (); # vector_id <-> vec_name mappings
 	my @vecType = (); # vector_id <-> type mappings
@@ -301,6 +263,35 @@ foreach my $fileName (@fileNames) {
 			$vecType[$+{vecnum}] = defined($+{vectype})?$+{vectype}:"";
 			next;
 		}
+
+		# found attr
+		if (m{
+				^attr
+				\s+
+				(?<attr>[^ ]+)
+				\s+
+				(?<value>.+)
+				\r?\n$
+				}x) {
+			$attrValues{$+{attr}} = $+{value};
+			next;
+		}
+
+		# found param
+		if (m{
+				^param
+				\s+
+				(?<param>[^ ]+)
+				\s+
+				(?<value>.+)
+				\r?\n$
+				}x) {
+			$paramValues{$+{param}} = $+{value};
+			next;
+		}
+       
+        print STDERR "\n\nUnknown line: $_\n\n" if $verbose;
+
 
 	}
 
