@@ -91,7 +91,15 @@ sub processFile {
 				\s+
 				(("([^"]+)")|([^\s]+))
 				\r?\n$
-			}x);
+			}x ||
+			m{
+                                ^itervar
+                                \s+
+                                (("([^"]+)")|([^\s]+))
+                                \s+
+                                (("([^"]+)")|([^\s]+))
+                                \r?\n$
+                        }x);
 
 		my $attr = defined($3)?$3:"" . defined($4)?$4:"";
 		my $value = defined($7)?$7:"" . defined($8)?$8:"";
