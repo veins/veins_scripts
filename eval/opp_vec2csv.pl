@@ -298,8 +298,8 @@ foreach my $fileName (@fileNames) {
 			$paramValues{$+{param}} = $+{value};
 			next;
 		}
-       
-        print STDERR "\n\nUnknown line: $_\n\n" if $verbose;
+
+		print STDERR "\n\nUnknown line: $_\n\n" if $verbose;
 
 
 	}
