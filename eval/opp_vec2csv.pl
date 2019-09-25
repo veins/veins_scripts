@@ -24,9 +24,6 @@
 #
 # (Refer to POD sections at end of file for documentation)
 #
-
-# Julian Heinovski, 1 Feb 2017: Fixed header parsing
-
 use strict;
 use warnings;
 use Getopt::Long qw(:config no_ignore_case bundling auto_version auto_help);
