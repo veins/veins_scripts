@@ -228,6 +228,18 @@ foreach my $fileName (@fileNames) {
 				}
 				$time = $+{time};
 				$value = $+{value};
+			} elsif($vec_type eq 'TV') {
+				unless ($+{vecdata} =~ m{
+							^
+							(?<value>([0-9e.+-]+)|(nan))  # allow -1.234e+56 and nan
+							$
+							}x) {
+					print STDERR "cannot parse as TV: \"".$+{vecdata}."\"\n";
+					next;
+				}
+				$time = $event;
+				$event = 0;
+				$value = $+{value};
 			} else {
 				print STDERR "unknown vector type: \"".$vec_type."\"\n";
 				next;
