@@ -35,7 +35,11 @@ my @runs = ();
 foreach (@configs) {
 	if ($_ =~ /Config ([^\:]*): (\d*)/) {
 		for (my $i=0; $i < $2; $i++) {
-			push(@runs,". $command $1 -r $i\n");
+			if ($ARGV[0] ne "") {
+				push(@runs,". $command $1 -r $i --result-dir=\"$ARGV[0]\"\n");
+			} else {
+				push(@runs,". $command $1 -r $i\n");
+			}
 		}
 	}
 }
