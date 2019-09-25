@@ -9,6 +9,7 @@ This is a collection of scripts to make using Veins easier.
 
 ### `generateRunsFile.pl`
 runs `./run -a` in the current directory and outputs all possible combinations of `./run -u Cmdenv -c X -r Y` lines (where `X` are all configurations and `Y` are all runs).
+Optionally appends <flags> for opp\_run given with '--flags "<flags>"' to each line.
 Output is formatted for use with runmaker4.py (see <https://github.com/veins/runmaker>).
 
 For example, given an `.ini` file that has a configuration section `[Config WithBeaconing]` which configures the simulation for 6 runs (e.g., 3 repetitions of 2 parameter values each), the following call and output might correspond:
@@ -21,6 +22,18 @@ $ generateRunsFile.pl | grep WithBeaconing
 . ./run -u Cmdenv -c WithBeaconing -r 3
 . ./run -u Cmdenv -c WithBeaconing -r 0
 . ./run -u Cmdenv -c WithBeaconing -r 5
+```
+
+When providing additional arguments to `opp_run`, the call might look like this:
+
+```
+$ generateRunsFile.pl --flags "--result-dir=/tmp --sim-time-limit=100s" | grep WithBeaconing
+. ./run -u Cmdenv -c WithBeaconing -r 2 --result-dir=/tmp --sim-time-limit=100s
+. ./run -u Cmdenv -c WithBeaconing -r 1 --result-dir=/tmp --sim-time-limit=100s
+. ./run -u Cmdenv -c WithBeaconing -r 4 --result-dir=/tmp --sim-time-limit=100s
+. ./run -u Cmdenv -c WithBeaconing -r 3 --result-dir=/tmp --sim-time-limit=100s
+. ./run -u Cmdenv -c WithBeaconing -r 0 --result-dir=/tmp --sim-time-limit=100s
+. ./run -u Cmdenv -c WithBeaconing -r 5 --result-dir=/tmp --sim-time-limit=100s
 ```
 
 ## eval/

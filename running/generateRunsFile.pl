@@ -22,6 +22,7 @@
 
 #
 # Runs './run -a' in the current directory and outputs all possible combinations of './run -u Cmdenv -c X -r Y' lines.
+# Optionally appends <flags> for opp_run given with '--flags "<flags>"' to each line.
 # Output is formatted for use with runmaker4.py (see <https://github.com/veins/runmaker>).
 #
 
@@ -32,10 +33,15 @@ my $command = "./run -u Cmdenv -c";
 my @configs = `./run -a`;
 my @runs = ();
 
+my $flags = "";
+if ($ARGV[0] eq "--flags") {
+	$flags = $ARGV[1];
+}
+
 foreach (@configs) {
 	if ($_ =~ /Config ([^\:]*): (\d*)/) {
 		for (my $i=0; $i < $2; $i++) {
-			push(@runs,". $command $1 -r $i\n");
+			push(@runs,". $command $1 -r $i $flags\n");
 		}
 	}
 }
