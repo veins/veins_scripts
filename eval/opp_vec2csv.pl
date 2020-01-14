@@ -1,6 +1,6 @@
 #!/usr/bin/env perl
 #
-# Copyright (C) 2011-2016 Christoph Sommer <sommer@ccs-labs.org>
+# Copyright (C) 2011-2020 Christoph Sommer <sommer@ccs-labs.org>
 #
 # SPDX-License-Identifier: GPL-2.0-or-later
 #
@@ -35,6 +35,7 @@ my $verbose = 0;
 my %vectorNames = ();
 my %attrNames = ();
 my %paramNames = ();
+my %itervarNames = ();
 my $mergeBy = "";
 my $sampleRate = 1;
 my $randomSeed = -1;
@@ -42,6 +43,7 @@ GetOptions (
 	"filter|F:s" => \%vectorNames,
 	"attr|A:s" => \%attrNames,
 	"param|P:s" => \%paramNames,
+	"itervar|I:s" => \%itervarNames,
 	"merge-by|m:s" => \$mergeBy,
 	"sample|s:i" => \$sampleRate,
 	"seed|S:i" => \$randomSeed,
@@ -72,6 +74,11 @@ print "\t"."node";
 foreach my $attrName (sort keys %attrNames) {
 	my $value = $attrNames{$attrName};
 	$value = $attrName unless (defined $value and $value ne "");
+	print "\t".$value;
+}
+foreach my $itervarName (sort keys %itervarNames) {
+	my $value = $itervarNames{$itervarName};
+	$value = $itervarName unless (defined $value and $value ne "");
 	print "\t".$value;
 }
 foreach my $paramName (sort keys %paramNames) {
@@ -171,6 +178,7 @@ foreach my $fileName (@fileNames) {
 	# read file
 	my %attrValues = ();
 	my %paramValues = ();
+	my %itervarValues = ();
 	my @nodName = (); # vector_id <-> nod_name mappings
 	my @vecName = (); # vector_id <-> vec_name mappings
 	my @vecType = (); # vector_id <-> type mappings
@@ -286,6 +294,19 @@ foreach my $fileName (@fileNames) {
 			next;
 		}
 
+		# found itervar
+		if (m{
+				^itervar
+				\s+
+				(?<itervar>[^ ]+)
+				\s+
+				(?<value>.+)
+				\r?\n$
+				}x) {
+			$itervarValues{$+{itervar}} = $+{value};
+			next;
+		}
+
 		# found param
 		if (m{
 				^param
@@ -318,6 +339,10 @@ foreach my $fileName (@fileNames) {
 		print "\t".$node;
 		foreach my $attrName (sort keys %attrNames) {
 			my $value = $attrValues{$attrName};
+			print "\t".(defined $value ? $value : "");
+		}
+		foreach my $itervarName (sort keys %itervarNames) {
+			my $value = $itervarValues{$itervarName};
 			print "\t".(defined $value ? $value : "");
 		}
 		foreach my $paramName (sort keys %paramNames) {
@@ -355,6 +380,10 @@ opp_vec2csv.pl [options] [file ...]
 -P --param <name>[=<alias>]
 
 	add a column for parameter <name>, calling it <alias> (if provided)
+
+-I --itervar <name>[=<alias>]
+
+	add a column for itervar <name>, calling it <alias> (if provided)
 
 -m --merge-by <e, m, t, or any combination thereof>
 
