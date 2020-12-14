@@ -320,6 +320,34 @@ foreach my $fileName (@fileNames) {
 			next;
 		}
 
+		# found run
+		if (m{
+				^run
+				\s+
+				(?<run>.+)
+				\r?\n$
+				}x) {
+			next;
+		}
+
+		# found version
+		if (m{
+				^version
+				\s+
+				(?<version>[0-9.]+)
+				\r?\n$
+				}x) {
+			next;
+		}
+
+		# found empty line
+		if (m{
+				^
+				\r?\n$
+				}x) {
+			next;
+		}
+
 		print STDERR "\n\nUnknown line: $_\n\n" if $verbose;
 
 
