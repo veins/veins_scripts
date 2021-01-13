@@ -1,6 +1,6 @@
 #!/usr/bin/env perl
 #
-# Copyright (C) 2008-2019 Christoph Sommer <sommer@ccs-labs.org>
+# Copyright (C) 2008-2021 Christoph Sommer <sommer@cms-labs.org>
 #
 # SPDX-License-Identifier: GPL-2.0-or-later
 #
@@ -20,186 +20,388 @@
 #
 
 #
-# opp_sca2csv.pl - Outputs OMNeT++ 4 output scalar files in CSV format, collating values from multiple scalars into one column each
+# opp_sca2csv.pl -- converts OMNeT++ .sca files to csv format, collating values from multiple scalars into one column each
 #
-
+# (Refer to POD sections at end of file for documentation)
+#
 use strict;
 use warnings;
-use Getopt::Long;
+use Getopt::Long qw(:config no_ignore_case bundling auto_version auto_help);
+use Pod::Usage;
 
+$main::VERSION = 4.00;
+
+my $verbose = 0;
+my %scalarNames = ();
+my %attrNames = ();
+my %paramNames = ();
+my %itervarNames = ();
+my %configNames = ();
+my $moduleRegex = "";
 my $noHeader = 0;
-my $modulesRe = "";
-my @fileNames = "";
+my $list = "";
+my @listLines = ();
 GetOptions (
-	"modules|m:s" => \$modulesRe,
-	"files|f:s{,}" => \@fileNames,
+	"filter|F:s" => \%scalarNames,
+	"attr|A:s" => \%attrNames,
+	"param|P:s" => \%paramNames,
+	"itervar|I:s" => \%itervarNames,
+	"config|C:s" => \%configNames,
+	"module-regex|M:s" => \$moduleRegex,
+	"verbose|v" => \$verbose,
 	"no-header|H" => \$noHeader,
-);
+	"list|l:s" => \$list
+) or pod2usage("$0: Bad command line options.\n");
+pod2usage("$0: No scalar files given.\n") if (@ARGV < 1);
 
-if (@ARGV < 1) {
-	print STDERR "usage: opp_sca2csv.pl <sca_name> [<sca_name> ...] [OPTIONS]\n";
-	print STDERR "\n";
-	print STDERR "  -m --modules:      Regular expression to match module names against. If used\n";
-	print STDERR "                     with a named capture group (?<module>...), only this portion\n";
-	print STDERR "                     of the module name is considered\n";
-	print STDERR "                     [default: all]\n";
-	print STDERR "  -f --files:        Name of file to read. Can be given multiple times\n";
-	print STDERR "                     [default: read from stdin]\n";
-	print STDERR "  -H --no-header:    Do not print header line\n";
-	print STDERR "                     [default: print header]\n";
-	print STDERR "\n";
-	print STDERR "e.g.: opp_sca2csv.pl -m '".'^scenario\.host\[(?<module>[0-9]+)\]'."' totalRcvd totalSent <input.sca >output.csv\n";
-	exit;
+
+# get list of file names from command line
+my @fileNames;
+while (my $fileName = shift @ARGV) {
+	push (@fileNames, $fileName);
 }
-
-my @sca_names;
-my %sca_known;
-while (my $sca_name = shift @ARGV) {
-	push (@sca_names, $sca_name);
-	$sca_known{$sca_name} = 1;
-}
-
 
 # output CSV header
-
 if ($noHeader) {
 }
 else {
-	print "nod_name";
-	foreach my $sca_name (@sca_names) {
-		print "\t".$sca_name;
+	# print header
+	print "node";
+	foreach my $attrName (sort keys %attrNames) {
+		my $value = $attrNames{$attrName};
+		$value = $attrName unless (defined $value and $value ne "");
+		print "\t".$value;
+	}
+	foreach my $itervarName (sort keys %itervarNames) {
+		my $value = $itervarNames{$itervarName};
+		$value = $itervarName unless (defined $value and $value ne "");
+		print "\t".$value;
+	}
+	foreach my $configName (sort keys %configNames) {
+		my $value = $configNames{$configName};
+		$value = $configName unless (defined $value and $value ne "");
+		print "\t".$value;
+	}
+	foreach my $paramName (sort keys %paramNames) {
+		my $value = $paramNames{$paramName};
+		$value = $paramName unless (defined $value and $value ne "");
+		print "\t".$value;
+	}
+	foreach my $scalarName (sort keys %scalarNames) {
+		my $value = $scalarNames{$scalarName};
+		$value = $scalarName unless (defined $value and $value ne "");
+		print "\t".$value;
 	}
 	print "\n";
 }
 
-sub processFile {
-	local (*handle) = @_;
+# remember if we already warned about overwriting a value
+my $warnedOverwriteValue = 0;
 
-	# read attrs from SCA header
+# iterate over scalar files
+foreach my $fileName (@fileNames) {
 
-	my %sca_attrs = ();
-	while (<handle>) {
+	# this is where we store all the data
+	my %events = ();
 
-		# header ends on empty line
-		last if (m{^\s*$});
+	print STDERR "reading \"".$fileName."\"...\n" if $verbose;
 
-		# line must contain scalar data
-		next unless (m{
-				^attr
-				\s+
-				(("([^"]+)")|([^\s]+))
-				\s+
-				(("([^"]+)")|([^\s]+))
-				\r?\n$
-			}x ||
-			m{
-                                ^itervar
-                                \s+
-                                (("([^"]+)")|([^\s]+))
-                                \s+
-                                (("([^"]+)")|([^\s]+))
-                                \r?\n$
-                        }x);
+	my $FILE;
+	open($FILE, $fileName) or die("Error opening file \"".$fileName."\"");
 
-		my $attr = defined($3)?$3:"" . defined($4)?$4:"";
-		my $value = defined($7)?$7:"" . defined($8)?$8:"";
+	my $fileSize = -s $fileName;
 
-		next if ($attr =~ m{datetime|inifile|iterationvars|iterationvars2|measurement|network|processid|replication|resultdir|seedset});
+	print STDERR "reading file...\n" if $verbose;
 
-		$sca_attrs{$attr} = $value;
+	my $readingHeader = 1;
 
-		if ($attr eq 'experiment') {
-			my @parts = split('-', $value);
-			foreach my $part (@parts) {
-				my @av = split('_', $part);
-				if ($av[1]) {
-					$sca_attrs{$av[0]} = $av[1];
-				} else {
-					$sca_attrs{$av[0]} = $av[0];
-				}
-			}
+	# read file
+	my %filterValues = ();
+	my %attrValues = ();
+	my %paramValues = ();
+	my %itervarValues = ();
+	my %configValues = ();
+	while (<$FILE>) {
+		my $lineNumber = $.;
+
+		# print progress
+		if ($verbose and ($. % 10000 == 0)) {
+			print STDERR sprintf("%.1f", tell($FILE)/1024/1024)."M/".sprintf("%.1f", $fileSize/1024/1024)."M (".sprintf("%.1f", tell($FILE)/$fileSize*100)."%)\r";
 		}
-	}
 
-
-	# read SCA body, output CSV body
-
-	my $current_nod_name = "";
-	my %sca_values = %sca_attrs;
-	my $have_sca_values = 0;
-	while (<handle>) {
-		# line must contain scalar data
-		next unless (m{
+		# found scalar data
+		if (m{
 				^scalar
 				\s+
-				(("([^"]+)")|([^\s]+))
+				(("(?<nodname1>[^"]+)")|(?<nodname2>[^\s]+))
 				\s+
-				(("([^"]+)")|([^\s]+))
+				(("(?<scaname1>[^"]+)")|(?<scaname2>[^\s]+))
 				\s+
-				([0-9.-]+)
+				(?<value>.*)
 				\r?\n$
-			}x);
+				}x) {
 
-		my $nod_name = defined($3)?$3:"" . defined($4)?$4:"";
-		my $sca_name = defined($7)?$7:"" . defined($8)?$8:"";
-		my $value = $9;
+			my $nod_name = defined($+{nodname1})?$+{nodname1}:"" . defined($+{nodname2})?$+{nodname2}:"";
+			my $sca_name = defined($+{scaname1})?$+{scaname1}:"" . defined($+{scaname2})?$+{scaname2}:"";
+			my $value = $+{value};
 
-		if (defined($modulesRe) and ($modulesRe)) {
-			next unless ($nod_name =~ $modulesRe);
-			if (defined($+{module})) {
-				$nod_name = $+{module};
-			}
-		}
-
-		# sca_name must be among those given on cmdline
-		next unless exists($sca_known{$sca_name});
-
-		# new nod_name?
-		if (!($nod_name eq $current_nod_name)) {
-
-			# see if there's anything in the buffer, print it
-			if ($have_sca_values) {
-				print $current_nod_name;
-				foreach my $sca_name (@sca_names) {
-					my $value = $sca_values{$sca_name};
-					print "\t".(defined $value ? $value : "");
+			if (defined($moduleRegex) and ($moduleRegex)) {
+				next unless ($nod_name =~ $moduleRegex);
+				if (defined($+{module})) {
+					$nod_name = $+{module};
 				}
-				print "\n";
 			}
 
-			# start over
-			$current_nod_name = $nod_name;
-			%sca_values = %sca_attrs;
-			$have_sca_values = 0;
+			if ($list and (index($list, "F") != -1)) {
+				if (not exists($filterValues{$sca_name})) {
+					$filterValues{$sca_name} = 1;
+					push(@listLines, "filter\t$sca_name\n");
+				}
+			}
 
+			# sca_name must have been given on command line
+			next unless exists($scalarNames{$sca_name});
+
+			my $key = $nod_name;
+			if ($verbose and not $warnedOverwriteValue and defined $events{$key}{$sca_name}) {
+				print STDERR "WARNING: value on \"".$fileName."\" line ".$lineNumber." overwrites existing value for \"".$key.".".$sca_name."\".\n";
+				$warnedOverwriteValue = 1;
+			}
+			$events{$key}{$sca_name} = $value;
+
+			next;
 		}
 
-		# buffer value
-		$sca_values{$sca_name} = $value;
-		$have_sca_values = 1;
+		# found attr
+		if ($readingHeader and m{
+				^attr
+				\s+
+				(?<attr>[^ ]+)
+				\s+
+				(?<value>.+)
+				\r?\n$
+				}x) {
+			$attrValues{$+{attr}} = $+{value};
+			if ($list and (index($list, "A") != -1)) {
+				push(@listLines, "attr\t$+{attr}\n");
+			}
+			next;
+		}
+
+		# found par (in body)
+		if (m{
+				^par
+				\s+
+				(("(?<nodname1>[^"]+)")|(?<nodname2>[^\s]+))
+				\s+
+				(("(?<scaname1>[^"]+)")|(?<scaname2>[^\s]+))
+				\s+
+				(?<value>.*)
+				\r?\n$
+				}x) {
+			# ignore
+			next;
+		}
+
+		# found attr (in body)
+		if ((not $readingHeader) and m{
+				^attr
+				\s+
+				(?<attr>[^ ]+)
+				\s+
+				(?<value>.+)
+				\r?\n$
+				}x) {
+			# ignore
+			next;
+		}
+
+		# found itervar
+		if ($readingHeader and m{
+				^itervar
+				\s+
+				(?<itervar>[^ ]+)
+				\s+
+				(?<value>.+)
+				\r?\n$
+				}x) {
+			$itervarValues{$+{itervar}} = $+{value};
+			if ($list and (index($list, "I") != -1)) {
+				push(@listLines, "itervar\t$+{itervar}\n");
+			}
+			next;
+		}
+
+		# found config
+		if ($readingHeader and m{
+				^config
+				\s+
+				(?<config>[^ ]+)
+				\s+
+				(?<value>.+)
+				\r?\n$
+				}x) {
+			$configValues{$+{config}} = $+{value};
+			if ($list and (index($list, "C") != -1)) {
+				push(@listLines, "config\t$+{config}\n");
+			}
+			next;
+		}
+
+		# found param
+		if ($readingHeader and m{
+				^param
+				\s+
+				(?<param>[^ ]+)
+				\s+
+				(?<value>.+)
+				\r?\n$
+				}x) {
+			$paramValues{$+{param}} = $+{value};
+			if ($list and (index($list, "P") != -1)) {
+				push(@listLines, "param\t$+{param}\n");
+			}
+			next;
+		}
+
+		# found run
+		if ($readingHeader and m{
+				^run
+				\s+
+				(?<run>.+)
+				\r?\n$
+				}x) {
+			next;
+		}
+
+		# found version
+		if ($readingHeader and m{
+				^version
+				\s+
+				(?<version>[0-9.]+)
+				\r?\n$
+				}x) {
+			next;
+		}
+
+		# found empty line
+		if ($readingHeader and m{
+				^
+				\r?\n$
+				}x) {
+			$readingHeader = 0;
+			next;
+		}
+
+		# found empty line (in body)
+		if ((not $readingHeader) and m{
+				^
+				\r?\n$
+				}x) {
+			# ignore
+			next;
+		}
+
+		print STDERR "\n\nUnknown line: $_\n\n" if $verbose;
+
 
 	}
 
-	# see if there's anything in the buffer, print it
-	if ($have_sca_values) {
-		print $current_nod_name;
-		foreach my $sca_name (@sca_names) {
-			my $value = $sca_values{$sca_name};
+	close($FILE);
+
+	print STDERR "done processing                             \n" if $verbose;
+
+	# print body
+	foreach my $line (@listLines) {
+		print $line;
+	}
+	foreach my $key (sort keys %events) {
+		my $node = $key;
+		print $node;
+		foreach my $attrName (sort keys %attrNames) {
+			my $value = $attrValues{$attrName};
+			print "\t".(defined $value ? $value : "");
+		}
+		foreach my $itervarName (sort keys %itervarNames) {
+			my $value = $itervarValues{$itervarName};
+			print "\t".(defined $value ? $value : "");
+		}
+		foreach my $configName (sort keys %configNames) {
+			my $value = $configValues{$configName};
+			print "\t".(defined $value ? $value : "");
+		}
+		foreach my $paramName (sort keys %paramNames) {
+			my $value = $paramValues{$paramName};
+			print "\t".(defined $value ? $value : "");
+		}
+		foreach my $scalarName (sort keys %scalarNames) {
+			my $value = $events{$key}{$scalarName};
 			print "\t".(defined $value ? $value : "");
 		}
 		print "\n";
 	}
+
+	print STDERR "done                                        \n" if $verbose;
 }
 
-# remove first (empty?!) component of array passed via "-f" parameter
-shift @fileNames;
+__END__
 
-if (scalar @fileNames == 0) {
-	processFile(*STDIN);
-} else {
-	foreach my $fname (@fileNames) {
-		open(F, $fname);
-		processFile(*F);
-		close F;
-	}
-}
+=head1 NAME
+
+opp_sca2csv.pl -- converts OMNeT++ .sca files to csv format
+
+=head1 SYNOPSIS
+
+opp_sca2csv.pl [options] [file ...]
+
+-F --filter <name>[=<alias>]
+
+	add a column for scalar <name>, calling it <alias> (if provided)
+
+-A --attr <name>[=<alias>]
+
+	add a column for attribute <name>, calling it <alias> (if provided)
+
+-P --param <name>[=<alias>]
+
+	add a column for parameter <name>, calling it <alias> (if provided)
+
+-I --itervar <name>[=<alias>]
+
+	add a column for itervar <name>, calling it <alias> (if provided)
+
+-C --config <name>[=<alias>]
+
+	add a column for configuration value <name>, calling it <alias> (if provided)
+
+-M --module-regex
+
+	Regular expression to match module names against. If used
+	with a named capture group (?<module>...), only this portion
+	of the module name is considered
+	[default: all]
+
+-v --verbose
+
+	log debug information to stderr
+
+-l --list [FAPIC]+
+
+	list values for -F, -A, -P, -I, -C
+
+-H --no-header
+
+	Do not print header line
+
+--version
+
+	Output version information
+
+--help
+
+	Output this information
+
+e.g.: opp_sca2csv.pl -M '".'^scenario\.host\[(?<module>[0-9]+)\]'."' -f totalRcvd -f totalSent input.sca >output.csv
+
+=cut
+

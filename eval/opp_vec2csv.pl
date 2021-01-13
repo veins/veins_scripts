@@ -1,6 +1,6 @@
 #!/usr/bin/env perl
 #
-# Copyright (C) 2011-2020 Christoph Sommer <sommer@ccs-labs.org>
+# Copyright (C) 2011-2021 Christoph Sommer <sommer@cms-labs.org>
 #
 # SPDX-License-Identifier: GPL-2.0-or-later
 #
@@ -20,7 +20,7 @@
 #
 
 #
-# opp_vec2csv.pl -- converts OMNeT++ .vec files to csv format
+# opp_vec2csv.pl -- converts OMNeT++ .vec files to csv format, collating values from multiple vectors into one column each
 #
 # (Refer to POD sections at end of file for documentation)
 #
@@ -29,25 +29,34 @@ use warnings;
 use Getopt::Long qw(:config no_ignore_case bundling auto_version auto_help);
 use Pod::Usage;
 
-$main::VERSION = 3.02;
+$main::VERSION = 4.00;
 
 my $verbose = 0;
 my %vectorNames = ();
 my %attrNames = ();
 my %paramNames = ();
 my %itervarNames = ();
+my %configNames = ();
+my $moduleRegex = "";
 my $mergeBy = "";
 my $sampleRate = 1;
 my $randomSeed = -1;
+my $noHeader = 0;
+my $list = "";
+my @listLines = ();
 GetOptions (
 	"filter|F:s" => \%vectorNames,
 	"attr|A:s" => \%attrNames,
 	"param|P:s" => \%paramNames,
 	"itervar|I:s" => \%itervarNames,
+	"config|C:s" => \%configNames,
+	"module-regex|M:s" => \$moduleRegex,
 	"merge-by|m:s" => \$mergeBy,
 	"sample|s:i" => \$sampleRate,
 	"seed|S:i" => \$randomSeed,
-	"verbose|v" => \$verbose
+	"verbose|v" => \$verbose,
+	"no-header|H" => \$noHeader,
+	"list|l:s" => \$list
 ) or pod2usage("$0: Bad command line options.\n");
 pod2usage("$0: No vector files given.\n") if (@ARGV < 1);
 
@@ -67,31 +76,41 @@ while (my $fileName = shift @ARGV) {
 	push (@fileNames, $fileName);
 }
 
-# print header
-print "event";
-print "\t"."time";
-print "\t"."node";
-foreach my $attrName (sort keys %attrNames) {
-	my $value = $attrNames{$attrName};
-	$value = $attrName unless (defined $value and $value ne "");
-	print "\t".$value;
+# output CSV header
+if ($noHeader) {
 }
-foreach my $itervarName (sort keys %itervarNames) {
-	my $value = $itervarNames{$itervarName};
-	$value = $itervarName unless (defined $value and $value ne "");
-	print "\t".$value;
+else {
+	# print header
+	print "event";
+	print "\t"."time";
+	print "\t"."node";
+	foreach my $attrName (sort keys %attrNames) {
+		my $value = $attrNames{$attrName};
+		$value = $attrName unless (defined $value and $value ne "");
+		print "\t".$value;
+	}
+	foreach my $itervarName (sort keys %itervarNames) {
+		my $value = $itervarNames{$itervarName};
+		$value = $itervarName unless (defined $value and $value ne "");
+		print "\t".$value;
+	}
+	foreach my $configName (sort keys %configNames) {
+		my $value = $configNames{$configName};
+		$value = $configName unless (defined $value and $value ne "");
+		print "\t".$value;
+	}
+	foreach my $paramName (sort keys %paramNames) {
+		my $value = $paramNames{$paramName};
+		$value = $paramName unless (defined $value and $value ne "");
+		print "\t".$value;
+	}
+	foreach my $vectorName (sort keys %vectorNames) {
+		my $value = $vectorNames{$vectorName};
+		$value = $vectorName unless (defined $value and $value ne "");
+		print "\t".$value;
+	}
+	print "\n";
 }
-foreach my $paramName (sort keys %paramNames) {
-	my $value = $paramNames{$paramName};
-	$value = $paramName unless (defined $value and $value ne "");
-	print "\t".$value;
-}
-foreach my $vectorName (sort keys %vectorNames) {
-	my $value = $vectorNames{$vectorName};
-	$value = $vectorName unless (defined $value and $value ne "");
-	print "\t".$value;
-}
-print "\n";
 
 
 
@@ -175,15 +194,24 @@ foreach my $fileName (@fileNames) {
 
 	print STDERR "reading file...\n" if $verbose;
 
+	my $readingHeader = 1;
+
 	# read file
+	my %filterValues = ();
 	my %attrValues = ();
 	my %paramValues = ();
 	my %itervarValues = ();
+	my %configValues = ();
 	my @nodName = (); # vector_id <-> nod_name mappings
 	my @vecName = (); # vector_id <-> vec_name mappings
 	my @vecType = (); # vector_id <-> type mappings
 	while (<$FILE>) {
 		my $lineNumber = $.;
+
+		# print progress
+		if ($verbose and ($. % 10000 == 0)) {
+			print STDERR sprintf("%.1f", tell($FILE)/1024/1024)."M/".sprintf("%.1f", $fileSize/1024/1024)."M (".sprintf("%.1f", tell($FILE)/$fileSize*100)."%)\r";
+		}
 
 		# found vector data
 		if (m{
@@ -204,10 +232,8 @@ foreach my $fileName (@fileNames) {
 				next unless int(rand($sampleRate)) == 0;
 			}
 
-			# print progress
-			if ($verbose and ($. % 10000 == 0)) {
-				print STDERR sprintf("%.1f", tell($FILE)/1024/1024)."M/".sprintf("%.1f", $fileSize/1024/1024)."M (".sprintf("%.1f", tell($FILE)/$fileSize*100)."%)\r";
-			}
+			# definition must be known
+			next unless exists($nodName[$+{vecnum}]);
 
 			# look up definition
 			my $nod_name = $nodName[$+{vecnum}];
@@ -275,14 +301,32 @@ foreach my $fileName (@fileNames) {
 				(\s+(?<vectype>[ETV]+))?
 				\r?\n$
 				}x) {
-			$nodName[$+{vecnum}] = defined($+{nodname1})?$+{nodname1}:"" . defined($+{nodname2})?$+{nodname2}:"";
-			$vecName[$+{vecnum}] = defined($+{vecname1})?$+{vecname1}:"" . defined($+{vecname2})?$+{vecname2}:"";
+			my $nod_name = defined($+{nodname1})?$+{nodname1}:"" . defined($+{nodname2})?$+{nodname2}:"";
+			my $vecname = defined($+{vecname1})?$+{vecname1}:"" . defined($+{vecname2})?$+{vecname2}:"";
+
+			if (defined($moduleRegex) and ($moduleRegex)) {
+				next unless ($nod_name =~ $moduleRegex);
+				if (defined($+{module})) {
+					$nod_name = $+{module};
+				}
+			}
+
+			if ($list and (index($list, "F") != -1)) {
+				if (not exists($filterValues{$vecname})) {
+					$filterValues{$vecname} = 1;
+					push(@listLines, "filter\t$vecname\n");
+				}
+			}
+
+
+			$nodName[$+{vecnum}] = $nod_name;
+			$vecName[$+{vecnum}] = $vecname;
 			$vecType[$+{vecnum}] = defined($+{vectype})?$+{vectype}:"";
 			next;
 		}
 
 		# found attr
-		if (m{
+		if ($readingHeader and m{
 				^attr
 				\s+
 				(?<attr>[^ ]+)
@@ -291,11 +335,14 @@ foreach my $fileName (@fileNames) {
 				\r?\n$
 				}x) {
 			$attrValues{$+{attr}} = $+{value};
+			if ($list and (index($list, "A") != -1)) {
+				push(@listLines, "attr\t$+{attr}\n");
+			}
 			next;
 		}
 
 		# found itervar
-		if (m{
+		if ($readingHeader and m{
 				^itervar
 				\s+
 				(?<itervar>[^ ]+)
@@ -304,11 +351,30 @@ foreach my $fileName (@fileNames) {
 				\r?\n$
 				}x) {
 			$itervarValues{$+{itervar}} = $+{value};
+			if ($list and (index($list, "I") != -1)) {
+				push(@listLines, "itervar\t$+{itervar}\n");
+			}
+			next;
+		}
+
+		# found config
+		if ($readingHeader and m{
+				^config
+				\s+
+				(?<config>[^ ]+)
+				\s+
+				(?<value>.+)
+				\r?\n$
+				}x) {
+			$configValues{$+{config}} = $+{value};
+			if ($list and (index($list, "C") != -1)) {
+				push(@listLines, "config\t$+{config}\n");
+			}
 			next;
 		}
 
 		# found param
-		if (m{
+		if ($readingHeader and m{
 				^param
 				\s+
 				(?<param>[^ ]+)
@@ -317,11 +383,14 @@ foreach my $fileName (@fileNames) {
 				\r?\n$
 				}x) {
 			$paramValues{$+{param}} = $+{value};
+			if ($list and (index($list, "P") != -1)) {
+				push(@listLines, "param\t$+{param}\n");
+			}
 			next;
 		}
 
 		# found run
-		if (m{
+		if ($readingHeader and m{
 				^run
 				\s+
 				(?<run>.+)
@@ -331,7 +400,7 @@ foreach my $fileName (@fileNames) {
 		}
 
 		# found version
-		if (m{
+		if ($readingHeader and m{
 				^version
 				\s+
 				(?<version>[0-9.]+)
@@ -341,10 +410,20 @@ foreach my $fileName (@fileNames) {
 		}
 
 		# found empty line
-		if (m{
+		if ($readingHeader and m{
 				^
 				\r?\n$
 				}x) {
+			$readingHeader = 0;
+			next;
+		}
+
+		# found empty line (in body)
+		if ((not $readingHeader) and m{
+				^
+				\r?\n$
+				}x) {
+			# ignore
 			next;
 		}
 
@@ -355,9 +434,12 @@ foreach my $fileName (@fileNames) {
 
 	close($FILE);
 
-	print STDERR "done processing                             \r" if $verbose;
+	print STDERR "done processing                             \n" if $verbose;
 
 	# print body
+	foreach my $line (@listLines) {
+		print $line;
+	}
 	foreach my $key (sort $sortFunction keys %events) {
 		my $time = $events{$key}{"__TIME"};
 		my $event = $events{$key}{"__EVENT"};
@@ -371,6 +453,10 @@ foreach my $fileName (@fileNames) {
 		}
 		foreach my $itervarName (sort keys %itervarNames) {
 			my $value = $itervarValues{$itervarName};
+			print "\t".(defined $value ? $value : "");
+		}
+		foreach my $configName (sort keys %configNames) {
+			my $value = $configValues{$configName};
 			print "\t".(defined $value ? $value : "");
 		}
 		foreach my $paramName (sort keys %paramNames) {
@@ -413,6 +499,16 @@ opp_vec2csv.pl [options] [file ...]
 
 	add a column for itervar <name>, calling it <alias> (if provided)
 
+-C --config <name>[=<alias>]
+
+	add a column for configuration value <name>, calling it <alias> (if provided)
+
+-M --module-regex
+
+	Regular expression to match module names against. If used
+	with a named capture group (?<module>...), only this portion
+	of the module name is considered
+
 -m --merge-by <e, m, t, or any combination thereof>
 
 	merge all those entries into one row that fulfill all of the following conditions:
@@ -432,6 +528,22 @@ opp_vec2csv.pl [options] [file ...]
 -v --verbose
 
 	log debug information to stderr
+
+-l --list [FAPIC]+
+
+	list values for -F, -A, -P, -I, -C
+
+-H --no-header
+
+	Do not print header line
+
+--version
+
+	Output version information
+
+--help
+
+	Output this information
 
 e.g.: opp_vec2csv.pl -A configname -F senderName -F receivedBytes=bytes input.vec >output.csv
 
