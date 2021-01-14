@@ -117,7 +117,7 @@ net.node[1].app recvd 20
 Converts an OMNeT++ `.sca` file into a wide-format CSV.
 For example, given the same scalar file as above, the following call and output will correspond:
 ```
-./opp_sca2csv.pl sent recvd -f results/output.sca
+./opp_sca2csv.pl -f sent -f recvd results/output.sca
 nod_name	sent	recvd
 net.node[0].app	1	2
 net.node[1].app	10	20
