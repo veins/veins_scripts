@@ -29,7 +29,7 @@ use warnings;
 use Getopt::Long qw(:config no_ignore_case bundling auto_version auto_help);
 use Pod::Usage;
 
-$main::VERSION = 4.00;
+$main::VERSION = 4.10;
 
 my $verbose = 0;
 my %scalarNames = ();
@@ -189,12 +189,51 @@ foreach my $fileName (@fileNames) {
 		}
 
 		# found par (in body)
-		if (m{
+		if ((not $readingHeader) and m{
 				^par
 				\s+
 				(("(?<nodname1>[^"]+)")|(?<nodname2>[^\s]+))
 				\s+
 				(("(?<scaname1>[^"]+)")|(?<scaname2>[^\s]+))
+				\s+
+				(?<value>.*)
+				\r?\n$
+				}x) {
+			# ignore
+			next;
+		}
+
+		# found statistic (in body)
+		if ((not $readingHeader) and m{
+				^statistic
+				\s+
+				(("(?<nodname1>[^"]+)")|(?<nodname2>[^\s]+))
+				\s+
+				(?<statname>.*)
+				\r?\n$
+				}x) {
+			# ignore
+			next;
+		}
+
+		# found field (in body)
+		if ((not $readingHeader) and m{
+				^field
+				\s+
+				(?<fieldname>.*)
+				\s+
+				(?<value>.*)
+				\r?\n$
+				}x) {
+			# ignore
+			next;
+		}
+
+		# found bin (in body)
+		if ((not $readingHeader) and m{
+				^bin
+				\s+
+				(?<position>.*)
 				\s+
 				(?<value>.*)
 				\r?\n$
@@ -312,9 +351,6 @@ foreach my $fileName (@fileNames) {
 	print STDERR "done processing                             \n" if $verbose;
 
 	# print body
-	foreach my $line (@listLines) {
-		print $line;
-	}
 	foreach my $key (sort keys %events) {
 		my $node = $key;
 		print $node;
@@ -342,6 +378,11 @@ foreach my $fileName (@fileNames) {
 	}
 
 	print STDERR "done                                        \n" if $verbose;
+}
+
+my %listLinesUnique = map { $_, 1 } @listLines;
+foreach my $line (sort (keys %listLinesUnique)) {
+	print $line;
 }
 
 __END__

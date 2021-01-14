@@ -29,7 +29,7 @@ use warnings;
 use Getopt::Long qw(:config no_ignore_case bundling auto_version auto_help);
 use Pod::Usage;
 
-$main::VERSION = 4.00;
+$main::VERSION = 4.10;
 
 my $verbose = 0;
 my %vectorNames = ();
@@ -341,6 +341,19 @@ foreach my $fileName (@fileNames) {
 			next;
 		}
 
+		# found attr (in body)
+		if ((not $readingHeader) and m{
+				^attr
+				\s+
+				(?<attr>[^ ]+)
+				\s+
+				(?<value>.+)
+				\r?\n$
+				}x) {
+			# ignore
+			next;
+		}
+
 		# found itervar
 		if ($readingHeader and m{
 				^itervar
@@ -437,9 +450,6 @@ foreach my $fileName (@fileNames) {
 	print STDERR "done processing                             \n" if $verbose;
 
 	# print body
-	foreach my $line (@listLines) {
-		print $line;
-	}
 	foreach my $key (sort $sortFunction keys %events) {
 		my $time = $events{$key}{"__TIME"};
 		my $event = $events{$key}{"__EVENT"};
@@ -471,6 +481,11 @@ foreach my $fileName (@fileNames) {
 	}
 
 	print STDERR "done                                        \n" if $verbose;
+}
+
+my %listLinesUnique = map { $_, 1 } @listLines;
+foreach my $line (sort (keys %listLinesUnique)) {
+	print $line;
 }
 
 __END__
