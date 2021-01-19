@@ -26,11 +26,11 @@
 set -e
 
 function extract_data_records() {
-    grep -v '^vector\|attr\|version\|param\|run\|itervar' | grep -v '^$' | sort -k 1n,1 -k 2n,2 --buffer-size=5%
+    grep -v '^vector\|attr\|version\|param\|run\|itervar' | grep -v '^$' | sort -s -k 1n,1 -k 2n,2 --buffer-size=5%
 }
 
 function extract_vector_definitions() {
-    grep '^vector' $TMPDIR/vec.fifo | sort -k 2n | sed 's/vector[[:space:]]\{1,\}\([0-9]\{1,\}\)[[:space:]]\{1,\}\([^[:space:]]\{1,\}\)[[:space:]]\{1,\}\([^[:space:]]\{1,\}\)[[:space:]]\{1,\}[ETV]*/\1	\2	\3/'
+    grep '^vector' $TMPDIR/vec.fifo | sort -s -k 2n | sed 's/vector[[:space:]]\{1,\}\([0-9]\{1,\}\)[[:space:]]\{1,\}\([^[:space:]]\{1,\}\)[[:space:]]\{1,\}\([^[:space:]]\{1,\}\)[[:space:]]\{1,\}[ETV]*/\1	\2	\3/'
 }
 
 FNAME="$1"
