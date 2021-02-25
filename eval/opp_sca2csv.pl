@@ -442,7 +442,7 @@ opp_sca2csv.pl [options] [file ...]
 
 	Output this information
 
-e.g.: opp_sca2csv.pl -M '".'^scenario\.host\[(?<module>[0-9]+)\]'."' -f totalRcvd -f totalSent input.sca >output.csv
+e.g.: opp_sca2csv.pl -M '".'^scenario\.host\[(?<module>[0-9]+)\]'."' -F totalRcvd -F totalSent input.sca >output.csv
 
 =cut
 
