@@ -30,7 +30,7 @@ function extract_data_records() {
 }
 
 function extract_vector_definitions() {
-    grep '^vector' $TMPDIR/vec.fifo | sort -s -k 2n | sed 's/vector[[:space:]]\{1,\}\([0-9]\{1,\}\)[[:space:]]\{1,\}\([^[:space:]]\{1,\}\)[[:space:]]\{1,\}\([^[:space:]]\{1,\}\)[[:space:]]\{1,\}[ETV]*/\1	\2	\3/'
+    grep '^vector' | sort -s -k 2n | sed 's/vector[[:space:]]\{1,\}\([0-9]\{1,\}\)[[:space:]]\{1,\}\([^[:space:]]\{1,\}\)[[:space:]]\{1,\}\([^[:space:]]\{1,\}\)[[:space:]]\{1,\}[ETV]*/\1	\2	\3/'
 }
 
 FNAME="$1"
@@ -48,4 +48,4 @@ mkfifo $TMPDIR/vec.fifo
 # - extract the data records from one of the input streams
 # - extract the vector definitions from the duplicated output stream (the named pipe)
 # - join both together to create a csv file
-cat $FNAME | tee $TMPDIR/vec.fifo | extract_data_records | join -j1 <(extract_vector_definitions) -
+cat $FNAME | tee $TMPDIR/vec.fifo | extract_data_records | join -j1 <(cat $TMPDIR/vec.fifo | extract_vector_definitions) -
