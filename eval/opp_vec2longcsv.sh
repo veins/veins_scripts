@@ -26,7 +26,7 @@
 set -e
 
 function extract_data_records() {
-    grep -v '^vector\|attr\|version\|param\|run\|itervar' | grep -v '^$' | sort -s -k 1n,1 -k 2n,2 --buffer-size=5%
+    grep -v '^vector\|attr\|version\|param\|run\|itervar\|config' | grep -v '^$' | sort -s -k 1n,1 -k 2n,2 --buffer-size=5%
 }
 
 function extract_vector_definitions() {
